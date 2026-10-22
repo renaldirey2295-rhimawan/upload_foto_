@@ -1,5 +1,6 @@
-STAFF PHOTO UPLOAD — FULL SOURCE CODE
-=====================================
+STAFF PHOTO UPLOAD — KONFIGURASI SSS MENTENG
+Folder Drive sudah diisi berdasarkan link yang kamu kirim.
+URL Web App Google Apps Script sudah diisi sesuai URL yang kamu kirim.
 
 FILE 1: index.html
 ==================
@@ -84,11 +85,11 @@ FILE 1: index.html
 
 <!--
 SETUP:
-1) Ganti URL_WEB_APP_DI_SINI dengan URL Web App Google Apps Script yang berakhiran /exec.
+1) Ganti https://script.google.com/macros/s/AKfycbzDe6iwL7fsxpuFO0JZ3YUmQ9XFHOwnBf7nAhcfXlZCUsyJpimmaxNHOUDktmcaqCzIKQ/exec dengan URL Web App Google Apps Script yang berakhiran /exec.
 2) Upload file ini sebagai index.html ke repository GitHub Pages.
 -->
 <script>
-  const SCRIPT_URL = "URL_WEB_APP_DI_SINI";
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDe6iwL7fsxpuFO0JZ3YUmQ9XFHOwnBf7nAhcfXlZCUsyJpimmaxNHOUDktmcaqCzIKQ/exec";
 
   const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
@@ -172,7 +173,7 @@ SETUP:
   }
 
   function savePhoto() {
-    if (!SCRIPT_URL.startsWith("https://script.google.com/macros/s/") || SCRIPT_URL.includes("URL_WEB_APP_DI_SINI")) {
+    if (!SCRIPT_URL.startsWith("https://script.google.com/macros/s/") || SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbzDe6iwL7fsxpuFO0JZ3YUmQ9XFHOwnBf7nAhcfXlZCUsyJpimmaxNHOUDktmcaqCzIKQ/exec")) {
       status("Admin belum memasukkan URL Web App Google Apps Script ke dalam index.html.", "error");
       return;
     }
@@ -275,7 +276,7 @@ FILE 2: Code.gs (Google Apps Script)
  * data sensitif. Endpoint ini hanya menerima foto JPEG dan membatasi ukuran.
  */
 
-const DRIVE_FOLDER_ID = "GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE";
+const DRIVE_FOLDER_ID = "1ek2alB19B2C6JEfBY8De6Avxnhsp4UyK";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 
 function doPost(e) {
@@ -372,7 +373,7 @@ A. SIAPKAN GOOGLE DRIVE
    Salin bagian ID_FOLDER.
 3. Buka https://script.google.com/ lalu buat project baru.
 4. Hapus kode contoh, tempel seluruh isi Code.gs.
-5. Ganti GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE dengan ID folder yang disalin.
+5. Ganti 1ek2alB19B2C6JEfBY8De6Avxnhsp4UyK dengan ID folder yang disalin.
 6. Simpan project.
 
 B. DEPLOY GOOGLE APPS SCRIPT
@@ -387,7 +388,7 @@ B. DEPLOY GOOGLE APPS SCRIPT
 C. HUBUNGKAN WEBSITE
 1. Buka index.html.
 2. Cari:
-   const SCRIPT_URL = "URL_WEB_APP_DI_SINI";
+   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDe6iwL7fsxpuFO0JZ3YUmQ9XFHOwnBf7nAhcfXlZCUsyJpimmaxNHOUDktmcaqCzIKQ/exec";
 3. Ganti dengan URL Web app /exec, contoh:
    const SCRIPT_URL = "https://script.google.com/macros/s/...../exec";
 4. Simpan.
@@ -409,4 +410,3 @@ CATATAN PENTING
 - Jika mengubah Code.gs setelah deploy, buka Deploy > Manage deployments > Edit (ikon pensil) > pilih New version > Deploy.
 - Uji pertama menggunakan satu foto percobaan. Pastikan file masuk ke folder yang benar.
 - Endpoint "Anyone" dapat disalahgunakan jika URL tersebar. Untuk penggunaan produksi dengan banyak staff, sebaiknya tambahkan kode akses per staff atau pembatasan tambahan.
-
