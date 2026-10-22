@@ -1,1 +1,412 @@
+STAFF PHOTO UPLOAD — FULL SOURCE CODE
+=====================================
+
+FILE 1: index.html
+==================
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <title>Staff Photo Upload</title>
+  <style>
+    :root { --navy:#102a43; --blue:#1769aa; --bg:#f3f6fa; --ink:#172b4d; --muted:#62748a; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:linear-gradient(135deg,#102a43,#1769aa); color:white; padding:28px 18px 34px; text-align:center; }
+    header h1 { margin:0 0 8px; font-size:clamp(23px,4vw,32px); }
+    header p { margin:0; opacity:.9; font-size:14px; }
+    main { width:min(680px,100%); margin:-16px auto 30px; padding:0 14px; }
+    .card { background:white; border-radius:18px; padding:20px; box-shadow:0 10px 30px #102a4312; }
+    .preview { width:100%; aspect-ratio:4/3; background:#e8eef5; border-radius:14px; overflow:hidden; display:flex; align-items:center; justify-content:center; position:relative; }
+    video, canvas { width:100%; height:100%; object-fit:cover; display:none; }
+    .placeholder { padding:20px; text-align:center; color:var(--muted); }
+    .placeholder .emoji { font-size:44px; display:block; margin-bottom:10px; }
+    .controls { display:flex; gap:10px; margin-top:12px; }
+    button { border:0; border-radius:11px; padding:13px 14px; font-size:15px; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .secondary { background:#e8eef5; color:var(--ink); flex:1; }
+    .primary { background:var(--blue); color:white; width:100%; }
+    .capture { background:var(--navy); color:white; flex:1; }
+    label { display:block; margin:18px 0 7px; font-weight:700; font-size:14px; }
+    input, select { width:100%; padding:13px 12px; border:1px solid #cbd5e1; border-radius:10px; font:inherit; background:white; color:var(--ink); }
+    .filename { margin-top:12px; padding:12px; border-radius:10px; background:#eef5fb; color:#204b70; font-size:13px; }
+    .filename strong { display:block; font-size:15px; margin-top:4px; overflow-wrap:anywhere; }
+    .status { display:none; margin-top:14px; padding:12px; border-radius:10px; font-size:14px; line-height:1.5; }
+    .status.show { display:block; }
+    .status.info { background:#e8f3ff; color:#174a78; }
+    .status.success { background:#e8f8ee; color:#17633a; }
+    .status.error { background:#fff0f0; color:#a12222; }
+    .small { color:var(--muted); font-size:12px; line-height:1.5; margin:12px 0 0; }
+    footer { text-align:center; padding:0 16px 24px; color:var(--muted); font-size:12px; }
+    @media (max-width:420px) { .card { padding:15px; } .controls button { padding:12px 8px; font-size:13px; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Staff Photo Upload</h1>
+  <p>Ambil foto menggunakan kamera dan simpan ke Google Drive</p>
+</header>
+<main>
+  <section class="card">
+    <div class="preview">
+      <div id="placeholder" class="placeholder"><span class="emoji">📷</span>Aktifkan kamera, lalu ambil foto.</div>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="controls">
+      <button type="button" id="startCamera" class="secondary">Aktifkan Kamera</button>
+      <button type="button" id="capture" class="capture" disabled>Ambil Foto</button>
+      <button type="button" id="retake" class="secondary" hidden>Ulangi</button>
+    </div>
+
+    <label for="staffName">Nama Staff</label>
+    <input id="staffName" type="text" maxlength="60" placeholder="Contoh: Desti" autocomplete="name" required>
+
+    <label for="section">Section</label>
+    <select id="section" required>
+      <option value="">Pilih section</option>
+      <option value="FRONT">FRONT</option>
+      <option value="BACK">BACK</option>
+    </select>
+
+    <div class="filename">Nama file yang akan disimpan:
+      <strong id="filename">NAMA-SECTION.JPG</strong>
+    </div>
+
+    <button type="button" id="save" class="primary" style="margin-top:18px" disabled>Simpan ke Google Drive</button>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <p class="small">Pastikan nama dan section benar sebelum menyimpan. Jika file dengan nama yang sama sudah ada, file lama akan diganti. Izinkan akses kamera saat browser memintanya.</p>
+  </section>
+</main>
+<footer>Staff Photo Upload • Gunakan melalui koneksi HTTPS</footer>
+
+<!--
+SETUP:
+1) Ganti URL_WEB_APP_DI_SINI dengan URL Web App Google Apps Script yang berakhiran /exec.
+2) Upload file ini sebagai index.html ke repository GitHub Pages.
+-->
+<script>
+  const SCRIPT_URL = "URL_WEB_APP_DI_SINI";
+
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const placeholder = document.getElementById("placeholder");
+  const startBtn = document.getElementById("startCamera");
+  const captureBtn = document.getElementById("capture");
+  const retakeBtn = document.getElementById("retake");
+  const saveBtn = document.getElementById("save");
+  const nameInput = document.getElementById("staffName");
+  const sectionInput = document.getElementById("section");
+  const filenameEl = document.getElementById("filename");
+  const statusEl = document.getElementById("status");
+  let stream = null;
+  let photoData = "";
+
+  function cleanName(value) {
+    return value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toUpperCase();
+  }
+  function filename() {
+    const n = cleanName(nameInput.value) || "NAMA";
+    const s = sectionInput.value || "SECTION";
+    return `${n}-${s}.JPG`;
+  }
+  function updateFilename() {
+    filenameEl.textContent = filename();
+    saveBtn.disabled = !(photoData && nameInput.value.trim() && sectionInput.value);
+  }
+  function status(message, type="info") {
+    statusEl.textContent = message;
+    statusEl.className = `status show ${type}`;
+  }
+
+  async function startCamera() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Browser tidak mendukung kamera. Buka web melalui HTTPS di Chrome.");
+      }
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1600 }, height: { ideal: 1200 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      video.style.display = "block";
+      canvas.style.display = "none";
+      placeholder.style.display = "none";
+      captureBtn.disabled = false;
+      photoData = "";
+      updateFilename();
+      status("Kamera aktif. Posisikan staff di dalam frame, lalu tekan Ambil Foto.", "info");
+    } catch (err) {
+      status("Kamera tidak dapat dibuka. Izinkan akses kamera pada browser dan pastikan web menggunakan HTTPS. Detail: " + err.message, "error");
+    }
+  }
+
+  function capturePhoto() {
+    if (!video.videoWidth) {
+      status("Kamera belum siap. Tunggu sebentar lalu coba lagi.", "error");
+      return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    photoData = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+    video.style.display = "none";
+    canvas.style.display = "block";
+    retakeBtn.hidden = false;
+    captureBtn.disabled = true;
+    updateFilename();
+    status("Foto berhasil diambil. Periksa nama dan section, lalu simpan.", "success");
+  }
+
+  function retakePhoto() {
+    photoData = "";
+    canvas.style.display = "none";
+    video.style.display = "block";
+    retakeBtn.hidden = true;
+    captureBtn.disabled = false;
+    updateFilename();
+  }
+
+  function savePhoto() {
+    if (!SCRIPT_URL.startsWith("https://script.google.com/macros/s/") || SCRIPT_URL.includes("URL_WEB_APP_DI_SINI")) {
+      status("Admin belum memasukkan URL Web App Google Apps Script ke dalam index.html.", "error");
+      return;
+    }
+    if (!photoData || !nameInput.value.trim() || !sectionInput.value) {
+      status("Ambil foto, isi nama staff, dan pilih section terlebih dahulu.", "error");
+      return;
+    }
+
+    const payload = {
+      name: nameInput.value.trim(),
+      section: sectionInput.value,
+      filename: filename(),
+      mimeType: "image/jpeg",
+      imageBase64: photoData
+    };
+
+    // Form POST to a hidden iframe avoids browser CORS restrictions on Apps Script.
+    const frameName = "uploadResultFrame";
+    let frame = document.getElementById(frameName);
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.name = frameName;
+      frame.id = frameName;
+      frame.style.display = "none";
+      document.body.appendChild(frame);
+    }
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = SCRIPT_URL;
+    form.target = frameName;
+    form.style.display = "none";
+    const field = document.createElement("textarea");
+    field.name = "payload";
+    field.value = JSON.stringify(payload);
+    form.appendChild(field);
+    document.body.appendChild(form);
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Mengirim...";
+    status("Foto sedang dikirim ke Google Drive. Jangan tutup halaman dulu.", "info");
+
+    const timeout = setTimeout(() => {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Simpan ke Google Drive";
+      status("Belum ada konfirmasi dari server. Periksa koneksi dan folder Google Drive sebelum mencoba ulang.", "error");
+      form.remove();
+    }, 30000);
+
+    function onMessage(event) {
+      if (event.data && event.data.type === "STAFF_PHOTO_UPLOAD_RESULT") {
+        clearTimeout(timeout);
+        window.removeEventListener("message", onMessage);
+        form.remove();
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Simpan ke Google Drive";
+        if (event.data.ok) {
+          status(`Berhasil disimpan: ${event.data.filename}`, "success");
+          photoData = "";
+          updateFilename();
+          saveBtn.disabled = true;
+        } else {
+          status("Gagal menyimpan: " + (event.data.message || "Kesalahan server."), "error");
+        }
+      }
+    }
+    window.addEventListener("message", onMessage);
+    form.submit();
+  }
+
+  startBtn.addEventListener("click", startCamera);
+  captureBtn.addEventListener("click", capturePhoto);
+  retakeBtn.addEventListener("click", retakePhoto);
+  saveBtn.addEventListener("click", savePhoto);
+  nameInput.addEventListener("input", updateFilename);
+  sectionInput.addEventListener("change", updateFilename);
+
+  window.addEventListener("beforeunload", () => {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+  });
+</script>
+</body>
+</html>
+
+
+
+FILE 2: Code.gs (Google Apps Script)
+=====================================
+/**
+ * STAFF PHOTO UPLOAD - Google Apps Script
+ *
+ * Setup:
+ * 1. Buat folder khusus di Google Drive.
+ * 2. Salin ID folder dari URL folder, lalu isi DRIVE_FOLDER_ID.
+ * 3. Deploy > New deployment > Web app.
+ *    Execute as: Me
+ *    Who has access: Anyone (agar staff tidak perlu login Google).
+ * 4. Salin URL /exec ke variabel SCRIPT_URL di index.html.
+ *
+ * Catatan: karena akses web app disetel Anyone, jangan gunakan URL ini untuk
+ * data sensitif. Endpoint ini hanya menerima foto JPEG dan membatasi ukuran.
+ */
+
+const DRIVE_FOLDER_ID = "GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE";
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+function doPost(e) {
+  let result;
+  try {
+    if (!e || !e.parameter || !e.parameter.payload) {
+      throw new Error("Payload foto tidak ditemukan.");
+    }
+    if (DRIVE_FOLDER_ID === "GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE") {
+      throw new Error("Admin belum mengatur DRIVE_FOLDER_ID pada Code.gs.");
+    }
+
+    const payload = JSON.parse(e.parameter.payload);
+    const name = String(payload.name || "").trim();
+    const section = String(payload.section || "").trim().toUpperCase();
+    const imageBase64 = String(payload.imageBase64 || "");
+
+    if (!name) throw new Error("Nama staff wajib diisi.");
+    if (!["FRONT", "BACK"].includes(section)) throw new Error("Section harus FRONT atau BACK.");
+    if (!imageBase64) throw new Error("Data foto kosong.");
+
+    const safeName = normalizeName_(name);
+    if (!safeName) throw new Error("Nama staff tidak valid.");
+    const filename = safeName + "-" + section + ".JPG";
+
+    const estimatedBytes = Math.floor(imageBase64.length * 3 / 4);
+    if (estimatedBytes > MAX_IMAGE_BYTES) throw new Error("Ukuran foto terlalu besar. Ambil foto ulang dengan resolusi lebih rendah.");
+
+    const bytes = Utilities.base64Decode(imageBase64);
+    const blob = Utilities.newBlob(bytes, "image/jpeg", filename);
+    const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+
+    // Keep one current file per staff + section: move older same-name files to trash.
+    const existing = folder.getFilesByName(filename);
+    while (existing.hasNext()) existing.next().setTrashed(true);
+
+    const file = folder.createFile(blob);
+    file.setName(filename);
+
+    result = { ok: true, filename: filename, fileId: file.getId() };
+  } catch (err) {
+    result = { ok: false, message: err && err.message ? err.message : String(err) };
+  }
+  return htmlResponse_(result);
+}
+
+function doGet() {
+  return HtmlService.createHtmlOutput("Staff Photo Upload endpoint is active.");
+}
+
+function normalizeName_(value) {
+  return value.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase()
+    .substring(0, 60);
+}
+
+function htmlResponse_(result) {
+  const safeJson = JSON.stringify({
+    type: "STAFF_PHOTO_UPLOAD_RESULT",
+    ok: Boolean(result.ok),
+    filename: result.filename || "",
+    message: result.message || ""
+  }).replace(/</g, "\\u003c");
+  const html = '<!doctype html><html><head><meta charset="utf-8"></head><body><script>' +
+    'window.parent.postMessage(' + safeJson + ', "*");' +
+    '</script>Upload request processed.</body></html>';
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+
+
+FILE 3: README-SETUP.txt (Panduan instalasi)
+============================================
+STAFF PHOTO UPLOAD — GitHub Pages + Google Drive
+
+FITUR
+- Staff membuka web di HP, mengaktifkan kamera, mengambil foto.
+- Staff mengisi nama dan memilih FRONT atau BACK.
+- Foto dikirim ke Google Drive sebagai NAMA-SECTION.JPG (contoh DESTI-FRONT.JPG).
+- Jika nama file yang sama sudah ada, file lama dipindahkan ke Trash lalu dibuat file terbaru.
+
+BAGIAN FILE
+- index.html : website untuk GitHub Pages.
+- Code.gs : backend Google Apps Script untuk menyimpan foto ke Google Drive.
+
+A. SIAPKAN GOOGLE DRIVE
+1. Buat folder Google Drive, misalnya "FOTO STAFF".
+2. Buka folder itu. URL berbentuk:
+   https://drive.google.com/drive/folders/ID_FOLDER
+   Salin bagian ID_FOLDER.
+3. Buka https://script.google.com/ lalu buat project baru.
+4. Hapus kode contoh, tempel seluruh isi Code.gs.
+5. Ganti GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE dengan ID folder yang disalin.
+6. Simpan project.
+
+B. DEPLOY GOOGLE APPS SCRIPT
+1. Klik Deploy > New deployment.
+2. Pilih jenis Web app.
+3. Execute as: Me.
+4. Who has access: Anyone.
+   Penting: setting ini memungkinkan staff mengirim tanpa login Google. Karena itu, gunakan folder khusus dan jangan simpan dokumen sensitif di folder tersebut.
+5. Klik Deploy dan selesaikan otorisasi Google.
+6. Salin URL Web app yang berakhiran /exec.
+
+C. HUBUNGKAN WEBSITE
+1. Buka index.html.
+2. Cari:
+   const SCRIPT_URL = "URL_WEB_APP_DI_SINI";
+3. Ganti dengan URL Web app /exec, contoh:
+   const SCRIPT_URL = "https://script.google.com/macros/s/...../exec";
+4. Simpan.
+
+D. PUBLIKASIKAN DI GITHUB PAGES
+1. Buat repository GitHub baru, misalnya staff-photo-upload.
+2. Upload index.html ke root repository.
+3. Buka Settings > Pages.
+4. Pada Build and deployment, pilih Deploy from a branch.
+5. Pilih branch main dan folder /(root), lalu Save.
+6. Buka URL GitHub Pages yang diberikan GitHub. Gunakan HTTPS.
+7. Tes di HP. Izinkan akses kamera saat browser meminta.
+
+CATATAN PENTING
+- Pilihan section yang tersedia saat ini FRONT dan BACK.
+- Nama file otomatis menjadi NAMA-SECTION.JPG. Contoh: Desti + Front = DESTI-FRONT.JPG.
+- Nama dengan spasi akan menggunakan tanda hubung, contoh "Desti Putri" menjadi DESTI-PUTRI-FRONT.JPG.
+- Google Drive mungkin menyimpan file JPG meskipun foto dibuat dari kamera dalam format JPEG; keduanya kompatibel.
+- Jika mengubah Code.gs setelah deploy, buka Deploy > Manage deployments > Edit (ikon pensil) > pilih New version > Deploy.
+- Uji pertama menggunakan satu foto percobaan. Pastikan file masuk ke folder yang benar.
+- Endpoint "Anyone" dapat disalahgunakan jika URL tersebar. Untuk penggunaan produksi dengan banyak staff, sebaiknya tambahkan kode akses per staff atau pembatasan tambahan.
 
