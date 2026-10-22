@@ -183,6 +183,7 @@
     let selectedFile = null;
     let previewUrl = null;
     let waitingForResult = false;
+    let uploadSubmittedAt = 0;
 
     function normalizedName(value) {
       return value.trim()
@@ -295,17 +296,22 @@
 
         payloadInput.value = JSON.stringify(payload);
         uploadForm.action = SCRIPT_URL;
+        uploadSubmittedAt = Date.now();
         uploadForm.submit();
 
+        // Apps Script may save the file successfully but its sandboxed response
+        // cannot always postMessage back to GitHub Pages. The iframe load handler
+        // below gives a non-technical "request sent" status without claiming a
+        // confirmed success when the server response cannot be inspected.
         window.uploadTimeout = window.setTimeout(() => {
           if (waitingForResult) {
             waitingForResult = false;
             saveButton.disabled = false;
             cameraButton.disabled = false;
             galleryButton.disabled = false;
-            showStatus("Belum ada konfirmasi dari server. Periksa koneksi dan deployment Apps Script, lalu coba lagi.", "error");
+            showStatus("Permintaan upload sudah dikirim. Jika file muncul di folder SSS MENTENG, foto berhasil tersimpan. Jika belum muncul, periksa deployment Apps Script lalu coba lagi.", "info");
           }
-        }, 45000);
+        }, 12000);
       } catch (error) {
         waitingForResult = false;
         saveButton.disabled = false;
@@ -313,6 +319,18 @@
         galleryButton.disabled = false;
         showStatus(error.message || "Gagal menyiapkan foto.", "error");
       }
+    });
+
+    document.getElementById("uploadFrame").addEventListener("load", () => {
+      if (!waitingForResult || !uploadSubmittedAt) return;
+      // Ignore an early initial/blank iframe load; only react after form submission.
+      if (Date.now() - uploadSubmittedAt < 700) return;
+      if (window.uploadTimeout) clearTimeout(window.uploadTimeout);
+      waitingForResult = false;
+      saveButton.disabled = false;
+      cameraButton.disabled = false;
+      galleryButton.disabled = false;
+      showStatus("Permintaan upload telah diproses. Periksa folder SSS MENTENG untuk memastikan file tersimpan.", "info");
     });
 
     window.addEventListener("message", (event) => {
